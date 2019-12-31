@@ -5,11 +5,115 @@
 #include <memory>
 #include <utility>
 #include "sock4.h"
+#include "parse.h"
 
 using namespace std;
 using namespace boost::asio;
+using namespace ip;
 
 io_service global_io_service;
+
+class ClientSession;
+
+class WebSession : public std::enable_shared_from_this<WebSession> {
+private:
+    tcp::resolver _resolv{global_io_service};
+    tcp::socket _socket{global_io_service};
+    tcp::resolver::query _query;
+    std::string req;
+    std::array<char, 4096> _cmd_buffer;
+    std::string host_ip;
+    std::string host_port;
+    enum { max_length = 4096 };
+    std::array<char, 4096> bytes;
+    tcp::socket _client_socket;
+    std::shared_ptr<ClientSession> es_ptr;
+
+public:
+    // constructor
+    WebSession(std::string host_ip, std::string host_port,
+               std::shared_ptr<ClientSession> es,
+               tcp::socket client_socket, std::string req)
+            : _query{host_ip, host_port},
+              es_ptr(es),
+              _client_socket(move(client_socket)),
+              req(req)
+
+    {
+    }
+    void start() { do_resolve(); }
+private:
+    void do_client_send(std::string data){
+        _client_socket.async_send(
+                buffer(data),
+                [this](boost::system::error_code ec, size_t /* length */) {
+                    if (!ec){
+//                         do_client_read();
+                    }
+                });
+    }
+
+    void do_web_send(std::string data){
+        _socket.async_send(
+                buffer(data),
+                [this](boost::system::error_code ec, size_t /* length */) {
+                    if (!ec){
+                        do_web_read();
+                    }
+                    else{
+                        std::cerr << "can't send to server" << std::endl;
+                    }
+                });
+    }
+
+    void do_client_read() {
+        _client_socket.async_read_some(
+                buffer(bytes, max_length),
+                [this](boost::system::error_code ec, size_t length) {
+                    if (!ec) {
+                        std::string recv_str(bytes.data());
+                        do_web_send(recv_str);
+                    }
+                });
+    }
+
+    void do_web_read() {
+        _socket.async_read_some(
+                buffer(bytes, max_length),
+                [this](boost::system::error_code ec, size_t length) {
+                    if (!ec) {
+                        std::string recv_str(bytes.data());
+                        do_client_send(recv_str);
+                    }
+                });
+    }
+
+    void do_connect(tcp::resolver::iterator it){
+        // std::cout << "cmds.size() = " << cmds.size() << std::endl;
+        _socket.async_connect(*it, [this](boost::system::error_code ec){
+            if (!ec){
+                // read_cmd_from_file();
+                // std::cout << "cmds.size() = " << cmds.size() << std::endl;
+                do_web_send(req);
+            }
+            else{
+                std::cerr << "do_connect failed: can't connect to np server" << std::endl;
+            }
+        });
+    }
+
+    void do_resolve() {
+        //  std::cout << "cmds.size() = " << cmds.size() << std::endl;
+        _resolv.async_resolve(_query, [this](boost::system::error_code ec, tcp::resolver::iterator it){
+            if(!ec){
+                do_connect(it);
+            }
+            else{
+                std::cerr << "do_resolve failed: can't connect to np_server" << std::endl;
+            }
+        });
+    }
+};
 
 class ClientSession : public enable_shared_from_this<ClientSession> {
  private:
@@ -29,12 +133,30 @@ class ClientSession : public enable_shared_from_this<ClientSession> {
         buffer(_data, max_length),
         [this, self](boost::system::error_code ec, size_t length) {
           std::string recv_str(std::begin(_data), std::end(_data));
-          SockRequest req = read_sock_request(
-              recv_str,_socket.remote_endpoint().address().to_string(),
-      std::to_string(_socket.remote_endpoint().port())
-          );
-          std::cout << req.get_msg() << std::endl;
-           if (!ec) do_write(get_sock_reply(GRANTED, 0).to_str());
+
+          if(recv_str.substr(0, 3) == "GET"){
+              WebRequest web_req = parse(
+                      recv_str,
+                      _socket.remote_endpoint().address().to_string(),
+                      std::to_string(_socket.remote_endpoint().port())
+              );
+                  WebSession ws(
+                          web_req.http_host, "80",
+                          shared_from_this(),
+                          move(_socket),
+                          recv_str
+                  );
+                  ws.start();
+                  global_io_service.run();
+          }
+          else{
+              SockRequest req = read_sock_request(
+                      recv_str,_socket.remote_endpoint().address().to_string(),
+                      std::to_string(_socket.remote_endpoint().port())
+              );
+              std::cout << req.get_msg() << std::endl;
+              if (!ec) do_write(get_sock_reply(GRANTED, 0).to_str());
+          }
         });
   }
 
