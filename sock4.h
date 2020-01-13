@@ -4,6 +4,10 @@
 #include <iostream>
 #include <string>
 #include <sstream>
+#include <boost/asio/signal_set.hpp>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 enum COMMAND{CONNECT=1, BIND=2};
 enum RESULT{GRANTED=1, REJECTED=2};

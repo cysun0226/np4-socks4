@@ -241,20 +241,41 @@ class SocksServer {
  private:
   ip::tcp::acceptor _acceptor;
   ip::tcp::socket _socket;
-//  boost::asio::signal_set _signal;
+  boost::asio::signal_set _signal;
 
  public:
   SocksServer(short port)
       : _acceptor(global_io_service, ip::tcp::endpoint(ip::tcp::v4(), port)),
-        _socket(global_io_service) {
+        _socket(global_io_service),
+        _signal(global_io_service, SIGCHLD)
+        {
+    wait_for_signal();
     do_accept();
   }
 
  private:
-  void do_accept() {
-    _acceptor.async_accept(_socket, [this](boost::system::error_code ec) {
-      if (!ec){
 
+  void wait_for_signal(){
+      _signal.async_wait(
+              [this](boost::system::error_code /*ec*/, int /*signo*/)
+              {
+                  if (_acceptor.is_open())
+                  {
+                      // Reap completed child processes so that we don't end up with
+                      // zombies.
+                      int status = 0;
+                      while (waitpid(-1, &status, WNOHANG) > 0) {}
+
+                      wait_for_signal();
+                  }
+              });
+  }
+
+  void do_accept() {
+    _acceptor.async_accept(
+            [this](boost::system::error_code ec, tcp::socket new_socket){
+      if (!ec){
+            _socket = std::move(new_socket);
           global_io_service.notify_fork(boost::asio::io_context::fork_prepare);
 
 //           fork a child for client session
@@ -264,16 +285,25 @@ class SocksServer {
               global_io_service.notify_fork(boost::asio::io_context::fork_child);
               // child don't need listener
               _acceptor.close();
+              _signal.cancel();
 
               // start client session
               make_shared<ClientSession>(move(_socket))->start();
 
 
           }
-
+          else{
+              global_io_service.notify_fork(boost::asio::io_context::fork_parent);
+              _socket.close();
+              do_accept();
+          }
 //          make_shared<ClientSession>(move(_socket))->start();
       }
-        do_accept();
+      else{
+          std::cerr << "Accept error: " << ec.message() << std::endl;
+          do_accept();
+      }
+
     });
   }
 };
