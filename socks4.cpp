@@ -49,7 +49,7 @@ std::string SockRequest::get_msg() {
     "<S_IP>:\t" << src_ip << std::endl <<
     "<S_PORT>:\t" << src_port << std::endl <<
     "<D_IP>:\t" << ip_to_str(DSTIP) << std::endl <<
-    "<D_PORT>:\t" << src_port << std::endl <<
+    "<D_PORT>:\t" << DSTPORT << std::endl <<
     "<Command>:\t" << cmd_to_str(CD) << std::endl <<
     "<Reply>:\t" << reply << std::endl;
 
@@ -80,4 +80,14 @@ std::string SockReply::to_str() {
     reply[7] = DSTIP[3];
 
     return reply;
+}
+
+bool is_sock(std::string recv_str){
+    SockRequest sp;
+    sp.VN = recv_str[0];
+    sp.CD = recv_str[1];
+    if (sp.VN == 4 && (sp.CD == 1 || sp.CD == 2)){
+        return true;
+    }
+    return false;
 }

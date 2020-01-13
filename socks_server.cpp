@@ -48,7 +48,13 @@ private:
                 buffer(data),
                 [this](boost::system::error_code ec, size_t /* length */) {
                     if (!ec){
-//                         do_client_read();
+//                        _socket.close();
+//                        _client_socket.close();
+                         do_web_read();
+                    }
+                    else{
+                        _socket.close();
+                        _client_socket.close();
                     }
                 });
     }
@@ -58,10 +64,12 @@ private:
                 buffer(data),
                 [this](boost::system::error_code ec, size_t /* length */) {
                     if (!ec){
-                        do_web_read();
+                        do_client_read();
                     }
                     else{
                         std::cerr << "can't send to server" << std::endl;
+                        _socket.close();
+                        _client_socket.close();
                     }
                 });
     }
@@ -72,7 +80,13 @@ private:
                 [this](boost::system::error_code ec, size_t length) {
                     if (!ec) {
                         std::string recv_str(bytes.data());
+                        std::cout << "client read" << std::endl;
+                        std::cout << recv_str << std::endl;
                         do_web_send(recv_str);
+                    }
+                    else{
+                        _socket.close();
+                        _client_socket.close();
                     }
                 });
     }
@@ -83,7 +97,13 @@ private:
                 [this](boost::system::error_code ec, size_t length) {
                     if (!ec) {
                         std::string recv_str(bytes.data());
+                        std::cout << "web read" << std::endl;
+                        std::cout << recv_str << std::endl;
                         do_client_send(recv_str);
+                    }
+                    else{
+                        _socket.close();
+                        _client_socket.close();
                     }
                 });
     }
@@ -92,12 +112,11 @@ private:
         // std::cout << "cmds.size() = " << cmds.size() << std::endl;
         _socket.async_connect(*it, [this](boost::system::error_code ec){
             if (!ec){
-                // read_cmd_from_file();
-                // std::cout << "cmds.size() = " << cmds.size() << std::endl;
-                do_web_send(req);
+                do_client_read();
+                do_web_read();
             }
             else{
-                std::cerr << "do_connect failed: can't connect to np server" << std::endl;
+                std::cerr << "do_connect failed: can't connect to target server" << std::endl;
             }
         });
     }
@@ -134,29 +153,74 @@ class ClientSession : public enable_shared_from_this<ClientSession> {
         [this, self](boost::system::error_code ec, size_t length) {
           std::string recv_str(std::begin(_data), std::end(_data));
 
-          if(recv_str.substr(0, 3) == "GET"){
-              WebRequest web_req = parse(
-                      recv_str,
-                      _socket.remote_endpoint().address().to_string(),
-                      std::to_string(_socket.remote_endpoint().port())
-              );
-                  WebSession ws(
-                          web_req.http_host, "80",
-                          shared_from_this(),
-                          move(_socket),
-                          recv_str
-                  );
-                  ws.start();
-                  global_io_service.run();
-          }
-          else{
+          if (is_sock(recv_str)){
+              std::cout << "is sock" << std::endl;
+              std::cout << recv_str << std::endl;
               SockRequest req = read_sock_request(
                       recv_str,_socket.remote_endpoint().address().to_string(),
                       std::to_string(_socket.remote_endpoint().port())
               );
               std::cout << req.get_msg() << std::endl;
-              if (!ec) do_write(get_sock_reply(GRANTED, 0).to_str());
+              if (!ec){
+//                  do_write(get_sock_reply(GRANTED, 0).to_str());
+                    write(_socket, buffer(get_sock_reply(GRANTED, 0).to_str()));
+              }
+              else{
+                  std::cout << "fail to reply" << std::endl;
+              }
+
+              WebSession ws(
+                      ip_to_str(req.DSTIP), std::to_string(req.DSTPORT),
+                      shared_from_this(),
+                      move(_socket),
+                      recv_str
+              );
+              ws.start();
+              global_io_service.run();
           }
+          else{
+              std::cout << "not sock" << std::endl;
+              std::cout << recv_str << std::endl;
+          }
+//          else{
+//              WebRequest web_req = parse(
+//                      recv_str,
+//                      _socket.remote_endpoint().address().to_string(),
+//                      std::to_string(_socket.remote_endpoint().port())
+//              );
+//              WebSession ws(
+//                      web_req.http_host, "80",
+//                      shared_from_this(),
+//                      move(_socket),
+//                      recv_str
+//              );
+//              ws.start();
+//              global_io_service.run();
+//          }
+
+//          if(recv_str.substr(0, 3) == "GET"){
+//              WebRequest web_req = parse(
+//                      recv_str,
+//                      _socket.remote_endpoint().address().to_string(),
+//                      std::to_string(_socket.remote_endpoint().port())
+//              );
+//                  WebSession ws(
+//                          web_req.http_host, "80",
+//                          shared_from_this(),
+//                          move(_socket),
+//                          recv_str
+//                  );
+//                  ws.start();
+//                  global_io_service.run();
+//          }
+//          else{
+//              SockRequest req = read_sock_request(
+//                      recv_str,_socket.remote_endpoint().address().to_string(),
+//                      std::to_string(_socket.remote_endpoint().port())
+//              );
+//              std::cout << req.get_msg() << std::endl;
+//              if (!ec) do_write(get_sock_reply(GRANTED, 0).to_str());
+//          }
         });
   }
 
@@ -177,6 +241,7 @@ class SocksServer {
  private:
   ip::tcp::acceptor _acceptor;
   ip::tcp::socket _socket;
+//  boost::asio::signal_set _signal;
 
  public:
   SocksServer(short port)
@@ -188,9 +253,27 @@ class SocksServer {
  private:
   void do_accept() {
     _acceptor.async_accept(_socket, [this](boost::system::error_code ec) {
-      if (!ec) make_shared<ClientSession>(move(_socket))->start();
+      if (!ec){
 
-      do_accept();
+          global_io_service.notify_fork(boost::asio::io_context::fork_prepare);
+
+//           fork a child for client session
+            std::cout << "new accept" << std::endl;
+          if (fork() == 0){
+              // child process
+              global_io_service.notify_fork(boost::asio::io_context::fork_child);
+              // child don't need listener
+              _acceptor.close();
+
+              // start client session
+              make_shared<ClientSession>(move(_socket))->start();
+
+
+          }
+
+//          make_shared<ClientSession>(move(_socket))->start();
+      }
+        do_accept();
     });
   }
 };
