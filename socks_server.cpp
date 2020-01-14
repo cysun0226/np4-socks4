@@ -5,7 +5,6 @@
 #include <memory>
 #include <utility>
 #include "sock4.h"
-#include "parse.h"
 
 using namespace std;
 using namespace boost::asio;

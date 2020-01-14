@@ -26,7 +26,5 @@ typedef struct {
 } WebRequest;
 
 WebRequest parse(std::string req_str, std::string remote_addr, std::string remote_port);
-bool is_sock(std::string recv_str);
-std::string ip_to_str(unsigned char ip[4]);
 
 #endif //SOCKSERVER_PARSE_H

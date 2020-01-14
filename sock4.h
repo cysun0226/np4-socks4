@@ -58,4 +58,8 @@ DstIP str_to_ip(std::string ip_str);
 
 void read_config();
 
+bool is_sock(std::string recv_str);
+
+std::string ip_to_str(unsigned char ip[4]);
+
 #endif
