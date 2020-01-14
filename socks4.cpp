@@ -41,6 +41,35 @@ DstIP str_to_ip(std::string ip_str){
     return dip;
 }
 
+std::vector<Rule> firewall_rule;
+
+bool is_permit(int mode, unsigned char dstip[4]){
+    for (int i = 0; i < firewall_rule.size(); ++i) {
+        std::string permit_ip[4];
+        std::stringstream ss;
+        ss.str(firewall_rule[i].ip);
+        std::string token;
+        int t = 0;
+        while(std::getline(ss, token, '.')){
+            permit_ip[t] = token;
+            t++;
+        }
+
+        int match_count = 0;
+
+        for (int j = 0; j < 4; ++j) {
+            if (std::to_string(dstip[j]) == permit_ip[j] || permit_ip[j] == "*"){ // same or is match
+                match_count ++;
+            }
+        }
+
+        if (match_count == 4 && mode == firewall_rule[i].mode){
+            return true;
+        }
+    }
+    return false;
+}
+
 SockRequest read_sock_request(std::string recv_str, std::string src_ip, std::string src_port){
     SockRequest sp;
     sp.VN = recv_str[0];
@@ -105,10 +134,10 @@ std::string SockRequest ::to_str() {
     return request;
 }
 
-SockReply get_sock_reply(bool granted, unsigned short dstport, unsigned char dstip[4]){
+SockReply get_sock_reply(int mode, unsigned short dstport, unsigned char dstip[4]){
     SockReply sr;
     sr.VN = 0;
-    sr.CD = (granted)? 90 : 91;
+    sr.CD = (is_permit(mode, dstip))? 90 : 91;
     sr.DSTPORT = dstport;
     sr.DSTIP[0] = dstip[0];
     sr.DSTIP[1] = dstip[1];
@@ -141,3 +170,31 @@ bool is_sock(std::string recv_str){
     return false;
 }
 
+void read_config(){
+    std::ifstream in_file(CONFIG_FILE);
+    std::string line;
+    if (in_file){
+        while (std::getline(in_file, line)){
+            std::stringstream ss;
+            std::string tmp;
+            Rule rule;
+            ss.str(line);
+            ss >> tmp; // permit
+            ss >> tmp; // mode
+            rule.mode = (tmp == "b")? BIND : CONNECT;
+            ss >> rule.ip; // ip
+            firewall_rule.push_back(rule);
+        }
+
+        std::cout << "\n # Permit IP list\n" << std::endl;
+
+        for (int i = 0; i < firewall_rule.size(); ++i) {
+            std::string m = (firewall_rule[i].mode == CONNECT)? "c":"b";
+            std::cout << m << " ";
+            std::cout << firewall_rule[i].ip << std::endl;
+        }
+    }
+    else{
+        std::cerr << "can't open sock config: " << CONFIG_FILE << std::endl;
+    }
+}

@@ -9,6 +9,9 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <boost/asio.hpp>
+#include <fstream>
+
+#define CONFIG_FILE "socks.conf"
 
 using namespace boost::asio;
 using namespace ip;
@@ -42,10 +45,17 @@ typedef struct {
     unsigned char ip[4];
 } DstIP;
 
+typedef struct {
+    int mode;
+    std::string ip;
+} Rule;
+
 SockRequest read_sock_request(std::string recv_str, std::string src_ip, std::string src_port);
 
-SockReply get_sock_reply(bool granted, unsigned short dstport, unsigned char dstip[4]);
+SockReply get_sock_reply(int mode, unsigned short dstport, unsigned char dstip[4]);
 
 DstIP str_to_ip(std::string ip_str);
+
+void read_config();
 
 #endif

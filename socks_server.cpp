@@ -158,7 +158,7 @@ class ClientSession : public enable_shared_from_this<ClientSession> {
               if (!ec){
                     // sock reply
                     if(req.CD == CONNECT){
-                        write(_socket, buffer(get_sock_reply(GRANTED, 0, req.DSTIP).to_str()));
+                        write(_socket, buffer(get_sock_reply(CONNECT, 0, req.DSTIP).to_str()));
                     }
                     else if (req.CD == BIND){
                         write(_socket, buffer(get_sock_reply(GRANTED, _socket.remote_endpoint().port(), str_to_ip(src_ip).ip).to_str()));
@@ -209,6 +209,7 @@ class SocksServer {
         _signal(global_io_service, SIGCHLD)
         {
     wait_for_signal();
+    read_config();
     do_accept();
   }
 
@@ -239,6 +240,7 @@ class SocksServer {
             // fork a child for client session
             std::cout << "new accept" << std::endl;
 
+
           if (fork() == 0){
               // child process
               global_io_service.notify_fork(boost::asio::io_context::fork_child);
@@ -254,6 +256,8 @@ class SocksServer {
               _socket.close();
               do_accept();
           }
+
+//          make_shared<ClientSession>(move(_socket))->start();
       }
       else{
           std::cerr << "Accept error: " << ec.message() << std::endl;
