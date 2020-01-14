@@ -87,15 +87,38 @@ SockRequest read_sock_request(std::string recv_str, std::string src_ip, std::str
     sp.domain_name = recv_str.substr(i);
     stripUnicode(sp.domain_name);
     if (sp.DSTIP[0] == 0 && sp.DSTIP[1] == 0 && sp.DSTIP[2] == 0){
-        io_service ios;
-        tcp::resolver  resolver(ios);
-        tcp::resolver::query q(sp.domain_name, std::to_string(sp.DSTPORT));
-        tcp::resolver::iterator iter = resolver.resolve(q);
-        DstIP dip = str_to_ip(iter->endpoint().address().to_string());
+        struct addrinfo hints, *res, *p;
+        int status;
+        char ipstr[INET6_ADDRSTRLEN];
+
+        memset(&hints, 0, sizeof hints);
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+
+        if ((status = getaddrinfo(sp.domain_name.c_str(), std::to_string(sp.DSTPORT).c_str(), &hints, &res)) != 0) {
+            fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
+            exit(1);
+        }
+
+        struct sockaddr_in *ipv4 = (struct sockaddr_in *)res->ai_addr;
+        void *addr = &(ipv4->sin_addr);
+        char *ipver = "IPv4";
+        inet_ntop(res->ai_family, addr, ipstr, sizeof ipstr);
+        std::cout << ipstr << std::endl;
+
+//        io_service ios;
+//        tcp::resolver  resolver(ios);
+//        tcp::resolver::query q(sp.domain_name, std::to_string(sp.DSTPORT));
+//        tcp::resolver::iterator iter = resolver.resolve(q);
+//        DstIP dip = str_to_ip(iter->endpoint().address().to_string());
+//        std::cout << sp.domain_name << std::endl;
+//        std::cout << iter->endpoint().address().to_string() << std::endl;
+        DstIP dip = str_to_ip(std::string(ipstr));
         sp.DSTIP[0] = dip.ip[0];
         sp.DSTIP[1] = dip.ip[1];
         sp.DSTIP[2] = dip.ip[2];
         sp.DSTIP[3] = dip.ip[3];
+//        freeaddrinfo(res);
     }
 
     // src info

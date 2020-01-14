@@ -11,6 +11,13 @@
 #include <boost/asio.hpp>
 #include <fstream>
 
+#include <stdio.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+
 #define CONFIG_FILE "socks.conf"
 
 using namespace boost::asio;
