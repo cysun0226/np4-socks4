@@ -346,8 +346,6 @@ class SocksServer {
             _socket = std::move(new_socket);
           global_io_service.notify_fork(boost::asio::io_context::fork_prepare);
             // fork a child for client session
-            std::cout << "new accept" << std::endl;
-
 
           if (fork() == 0){
               // child process
