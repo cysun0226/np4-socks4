@@ -148,16 +148,22 @@ class ClientSession : public enable_shared_from_this<ClientSession> {
           std::string recv_str(std::begin(_data), std::end(_data));
 
           if (is_sock(recv_str)){
-              std::cout << "is sock" << std::endl;
-              std::cout << recv_str << std::endl;
+              std::string src_ip = _socket.remote_endpoint().address().to_string();
+              std::string src_port = std::to_string(_socket.remote_endpoint().port());
               SockRequest req = read_sock_request(
-                      recv_str,_socket.remote_endpoint().address().to_string(),
-                      std::to_string(_socket.remote_endpoint().port())
+                      recv_str,src_ip,
+                      src_port
               );
               std::cout << req.get_msg() << std::endl;
               if (!ec){
-//                  do_write(get_sock_reply(GRANTED, 0).to_str());
-                    write(_socket, buffer(get_sock_reply(GRANTED, 0).to_str()));
+                    // sock reply
+                    if(req.CD == CONNECT){
+                        write(_socket, buffer(get_sock_reply(GRANTED, 0, req.DSTIP).to_str()));
+                    }
+                    else if (req.CD == BIND){
+                        write(_socket, buffer(get_sock_reply(GRANTED, _socket.remote_endpoint().port(), str_to_ip(src_ip).ip).to_str()));
+                        write(_socket, buffer(get_sock_reply(GRANTED, _socket.remote_endpoint().port(), str_to_ip(src_ip).ip).to_str()));
+                    }
               }
               else{
                   std::cout << "fail to reply" << std::endl;
@@ -173,8 +179,6 @@ class ClientSession : public enable_shared_from_this<ClientSession> {
               global_io_service.run();
           }
           else{
-              std::cout << "not sock" << std::endl;
-              std::cout << recv_str << std::endl;
           }
         });
   }
@@ -232,9 +236,9 @@ class SocksServer {
       if (!ec){
             _socket = std::move(new_socket);
           global_io_service.notify_fork(boost::asio::io_context::fork_prepare);
-
-//           fork a child for client session
+            // fork a child for client session
             std::cout << "new accept" << std::endl;
+
           if (fork() == 0){
               // child process
               global_io_service.notify_fork(boost::asio::io_context::fork_child);
@@ -244,15 +248,12 @@ class SocksServer {
 
               // start client session
               make_shared<ClientSession>(move(_socket))->start();
-
-
           }
           else{
               global_io_service.notify_fork(boost::asio::io_context::fork_parent);
               _socket.close();
               do_accept();
           }
-//          make_shared<ClientSession>(move(_socket))->start();
       }
       else{
           std::cerr << "Accept error: " << ec.message() << std::endl;

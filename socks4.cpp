@@ -1,5 +1,13 @@
 #include "sock4.h"
 
+bool invalidChar (char c){
+    return !(c>=33 && c <126);
+}
+void stripUnicode(std::string & str){
+    str.erase(remove_if(str.begin(),str.end(), invalidChar), str.end());
+}
+
+
 std::string cmd_to_str(unsigned char CD){
     switch (CD) {
         case CONNECT:
@@ -48,6 +56,7 @@ SockRequest read_sock_request(std::string recv_str, std::string src_ip, std::str
     }
     // if socks 4a, resolve domain name
     sp.domain_name = recv_str.substr(i);
+    stripUnicode(sp.domain_name);
     if (sp.DSTIP[0] == 0 && sp.DSTIP[1] == 0 && sp.DSTIP[2] == 0){
         io_service ios;
         tcp::resolver  resolver(ios);

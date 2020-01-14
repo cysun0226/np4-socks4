@@ -25,7 +25,7 @@
 #include "sock4.h"
 
 #define MAX_SESSION 5
-std::string host_name[MAX_SESSION];
+std::string web_host_name[MAX_SESSION];
 std::string host_port[MAX_SESSION];
 std::string file_name[MAX_SESSION];
 std::string socks_host;
@@ -192,12 +192,12 @@ class ShellSession : public std::enable_shared_from_this<ShellSession> {
                     SockRequest sr;
                     sr.VN = 4;
                     sr.CD = 1;
-                    sr.DSTPORT = host_port;
+                    sr.DSTPORT = (unsigned short)std::atoi(host_port.c_str());
                     sr.DSTIP[0] = 0;
                     sr.DSTIP[1] = 0;
                     sr.DSTIP[2] = 0;
                     sr.DSTIP[3] = 1;
-                    sr.domain_name = host_name;
+                    sr.domain_name = host_ip;
                     write(_socket, buffer(sr.to_str()));
                     do_read();
                 }
@@ -298,7 +298,7 @@ void parse_query(std::string query_str){
   for( std::vector<std::string>::iterator it = tokens.begin(); it != tokens.end(); ++it ){
     if(it->at(0) == 'h'){
       std::string hid = it->substr(0, it->find("="));
-      host_name[atoi(hid.substr(1).c_str())] = it->substr(it->find("=")+1);
+      web_host_name[atoi(hid.substr(1).c_str())] = it->substr(it->find("=")+1);
       if(it->substr(it->find("=")+1).size()>1){
         host_num++;
       }
@@ -329,7 +329,7 @@ int main(int argc, char** argv) {
     parse_query(query_str);
 
     for (size_t i = 0; i < host_num; i++){
-      host_cols.push_back("<th scope=\"col\">"+host_name[i]+":"+host_port[i]+"</th>");
+      host_cols.push_back("<th scope=\"col\">"+web_host_name[i]+":"+host_port[i]+"</th>");
       table_tds.push_back("<td><pre id=\"s"+std::to_string(i)+"\" class=\"mb-0\"></pre></td>");
     }
 
@@ -339,7 +339,7 @@ int main(int argc, char** argv) {
     // build np_server connection
     std::vector<ShellSession> np_sessions;
     for (size_t i = 0; i < host_num; i++){
-      np_sessions.push_back(ShellSession(host_name[i], host_port[i], file_name[i], std::to_string(i)));
+      np_sessions.push_back(ShellSession(web_host_name[i], host_port[i], file_name[i], std::to_string(i)));
     }
     for (size_t i = 0; i < host_num; i++){
       np_sessions[i].start();
