@@ -86,6 +86,7 @@ SockRequest read_sock_request(std::string recv_str, std::string src_ip, std::str
     // if socks 4a, resolve domain name
     sp.domain_name = recv_str.substr(i);
     stripUnicode(sp.domain_name);
+    sp.domain_name = sp.domain_name.substr(0, sp.domain_name.find("@"));
     if (sp.DSTIP[0] == 0 && sp.DSTIP[1] == 0 && sp.DSTIP[2] == 0){
         struct addrinfo hints, *res, *p;
         int status;
