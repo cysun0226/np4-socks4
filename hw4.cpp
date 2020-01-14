@@ -22,6 +22,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include "sock4.h"
+
 #define MAX_SESSION 5
 std::string host_name[MAX_SESSION];
 std::string host_port[MAX_SESSION];
@@ -93,7 +95,9 @@ class ShellSession : public std::enable_shared_from_this<ShellSession> {
     public:
         // constructor
         ShellSession(std::string host_ip, std::string host_port, std::string cmd_file, std::string sid)
-            : _query{host_ip, host_port},
+            : _query{socks_host, socks_port},
+              host_ip(host_ip),
+              host_port(host_port),
               cmd_file(cmd_file),
               session_id(sid),
               cmd_idx(0),
@@ -184,12 +188,21 @@ class ShellSession : public std::enable_shared_from_this<ShellSession> {
           // std::cout << "cmds.size() = " << cmds.size() << std::endl;
             _socket.async_connect(*it, [this](boost::system::error_code ec){
                 if (!ec){
-                    // read_cmd_from_file();
-                    // std::cout << "cmds.size() = " << cmds.size() << std::endl;
+                    // connect to the socks server
+                    SockRequest sr;
+                    sr.VN = 4;
+                    sr.CD = 1;
+                    sr.DSTPORT = host_port;
+                    sr.DSTIP[0] = 0;
+                    sr.DSTIP[1] = 0;
+                    sr.DSTIP[2] = 0;
+                    sr.DSTIP[3] = 1;
+                    sr.domain_name = host_name;
+                    write(_socket, buffer(sr.to_str()));
                     do_read();
                 }
                 else{
-                    std::cerr << "can't connect to np server" << std::endl;
+                    std::cerr << "can't connect to sock server" << std::endl;
                 }
             });
         }
