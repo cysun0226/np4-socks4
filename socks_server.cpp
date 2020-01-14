@@ -50,6 +50,8 @@ private:
                 buffer(web_data, length),
                 [this](boost::system::error_code ec, size_t /* length */) {
                     if (!ec){
+//                        std::cout << "# send to client: " << std::endl;
+//                        std::cout << web_data.data();
                          do_web_read();
                     }
                     else{
@@ -79,6 +81,7 @@ private:
                 buffer(client_data, max_length),
                 [this](boost::system::error_code ec, size_t length) {
                     if (!ec) {
+//                        std::cout << client_data.data() << std::endl;
                         do_web_send(length);
                     }
                     else{
@@ -128,6 +131,111 @@ private:
     }
 };
 
+
+class BindSession : public std::enable_shared_from_this<BindSession> {
+private:
+    tcp::socket _client_socket{global_io_service};
+    tcp::socket _socket;
+    tcp::acceptor _acceptor;
+    std::array<char, 4096> web_data;
+    std::array<char, 4096> client_data;
+    std::shared_ptr<ClientSession> es_ptr;
+    enum { max_length = 4096 };
+
+public:
+    // constructor
+    BindSession(tcp::socket client_socket)
+            : _client_socket(move(client_socket)),
+              _socket(global_io_service),
+              _acceptor(global_io_service, {tcp::v4(), 0})
+    {
+    }
+    void start() {
+        // sock reply
+        write(_client_socket, buffer(
+                get_sock_reply(BIND, _acceptor.local_endpoint().port(), str_to_ip("0.0.0.0").ip).to_str()));
+        accept();
+    }
+private:
+    void do_client_send(size_t length){
+        async_write(_client_socket, buffer(web_data, length),
+                [this](boost::system::error_code ec, size_t /* length */) {
+                    if (!ec){
+                         do_ftp_read();
+                    }
+                    else{
+                        _client_socket.close();
+                    }
+                });
+    }
+
+     void do_client_read() {
+         _client_socket.async_read_some(
+                 buffer(client_data, max_length),
+                 [this](boost::system::error_code ec, size_t length) {
+                     if (!ec) {
+                         std::cout << "# bind client_read " << std::endl;
+                         std::cout << client_data.data() << std::endl;
+                     }
+                     else{
+                         _socket.close();
+                         _client_socket.close();
+                     }
+                 });
+     }
+
+    // void do_web_send(size_t length){
+    //     _socket.async_send(
+    //             buffer(client_data, length),
+    //             [this](boost::system::error_code ec, size_t /* length */) {
+    //                 if (!ec){
+    //                     do_client_read();
+    //                 }
+    //                 else{
+    //                     std::cerr << "can't send to server" << std::endl;
+    //                     _socket.close();
+    //                     _client_socket.close();
+    //                 }
+    //             });
+    // }
+
+    void do_ftp_read() {
+        _socket.async_read_some(
+                buffer(web_data, max_length),
+                [this](boost::system::error_code ec, size_t length) {
+                    if (!ec) {
+                        do_client_send(length);
+                    }
+                    else{
+                        _socket.close();
+                        _client_socket.close();
+                    }
+                });
+    }
+
+    void accept(){
+    _acceptor.async_accept(
+        [this](boost::system::error_code ec, tcp::socket new_socket)
+        {
+          if (!ec){
+            _socket = std::move(new_socket);
+            // sock reply
+            write(_client_socket, buffer(
+                  get_sock_reply(BIND, _acceptor.local_endpoint().port(), str_to_ip("0.0.0.0").ip).to_str()));
+            do_ftp_read();
+//            accept();
+
+          }
+          else
+          {
+            std::cerr << "Accept error: " << ec.message() << std::endl;
+            accept();
+          }
+        });
+  }
+};
+
+
 class ClientSession : public enable_shared_from_this<ClientSession> {
  private:
   enum { max_length = 1024 };
@@ -161,8 +269,9 @@ class ClientSession : public enable_shared_from_this<ClientSession> {
                         write(_socket, buffer(get_sock_reply(CONNECT, 0, req.DSTIP).to_str()));
                     }
                     else if (req.CD == BIND){
-                        write(_socket, buffer(get_sock_reply(GRANTED, _socket.remote_endpoint().port(), str_to_ip(src_ip).ip).to_str()));
-                        write(_socket, buffer(get_sock_reply(GRANTED, _socket.remote_endpoint().port(), str_to_ip(src_ip).ip).to_str()));
+                        BindSession bs(move(_socket));
+                        bs.start();
+                        global_io_service.run();          
                     }
               }
               else{
