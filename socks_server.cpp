@@ -25,7 +25,9 @@ private:
     std::string host_ip;
     std::string host_port;
     enum { max_length = 4096 };
-    std::array<char, 4096> bytes;
+//    std::array<char, 4096> bytes;
+    std::array<char, 4096> web_data;
+    std::array<char, 4096> client_data;
     tcp::socket _client_socket;
     std::shared_ptr<ClientSession> es_ptr;
 
@@ -43,13 +45,11 @@ public:
     }
     void start() { do_resolve(); }
 private:
-    void do_client_send(std::string data){
+    void do_client_send(size_t length){
         _client_socket.async_send(
-                buffer(data),
+                buffer(web_data, length),
                 [this](boost::system::error_code ec, size_t /* length */) {
                     if (!ec){
-//                        _socket.close();
-//                        _client_socket.close();
                          do_web_read();
                     }
                     else{
@@ -59,9 +59,9 @@ private:
                 });
     }
 
-    void do_web_send(std::string data){
+    void do_web_send(size_t length){
         _socket.async_send(
-                buffer(data),
+                buffer(client_data, length),
                 [this](boost::system::error_code ec, size_t /* length */) {
                     if (!ec){
                         do_client_read();
@@ -76,13 +76,10 @@ private:
 
     void do_client_read() {
         _client_socket.async_read_some(
-                buffer(bytes, max_length),
+                buffer(client_data, max_length),
                 [this](boost::system::error_code ec, size_t length) {
                     if (!ec) {
-                        std::string recv_str(bytes.data());
-                        std::cout << "client read" << std::endl;
-                        std::cout << recv_str << std::endl;
-                        do_web_send(recv_str);
+                        do_web_send(length);
                     }
                     else{
                         _socket.close();
@@ -93,13 +90,10 @@ private:
 
     void do_web_read() {
         _socket.async_read_some(
-                buffer(bytes, max_length),
+                buffer(web_data, max_length),
                 [this](boost::system::error_code ec, size_t length) {
                     if (!ec) {
-                        std::string recv_str(bytes.data());
-                        std::cout << "web read" << std::endl;
-                        std::cout << recv_str << std::endl;
-                        do_client_send(recv_str);
+                        do_client_send(length);
                     }
                     else{
                         _socket.close();
@@ -128,7 +122,7 @@ private:
                 do_connect(it);
             }
             else{
-                std::cerr << "do_resolve failed: can't connect to np_server" << std::endl;
+                std::cerr << "do_resolve failed: can't connect to web server" << std::endl;
             }
         });
     }
@@ -182,45 +176,6 @@ class ClientSession : public enable_shared_from_this<ClientSession> {
               std::cout << "not sock" << std::endl;
               std::cout << recv_str << std::endl;
           }
-//          else{
-//              WebRequest web_req = parse(
-//                      recv_str,
-//                      _socket.remote_endpoint().address().to_string(),
-//                      std::to_string(_socket.remote_endpoint().port())
-//              );
-//              WebSession ws(
-//                      web_req.http_host, "80",
-//                      shared_from_this(),
-//                      move(_socket),
-//                      recv_str
-//              );
-//              ws.start();
-//              global_io_service.run();
-//          }
-
-//          if(recv_str.substr(0, 3) == "GET"){
-//              WebRequest web_req = parse(
-//                      recv_str,
-//                      _socket.remote_endpoint().address().to_string(),
-//                      std::to_string(_socket.remote_endpoint().port())
-//              );
-//                  WebSession ws(
-//                          web_req.http_host, "80",
-//                          shared_from_this(),
-//                          move(_socket),
-//                          recv_str
-//                  );
-//                  ws.start();
-//                  global_io_service.run();
-//          }
-//          else{
-//              SockRequest req = read_sock_request(
-//                      recv_str,_socket.remote_endpoint().address().to_string(),
-//                      std::to_string(_socket.remote_endpoint().port())
-//              );
-//              std::cout << req.get_msg() << std::endl;
-//              if (!ec) do_write(get_sock_reply(GRANTED, 0).to_str());
-//          }
         });
   }
 
