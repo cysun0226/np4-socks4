@@ -20,6 +20,19 @@ std::string ip_to_str(unsigned char ip[4]){
     return ss.str();
 }
 
+DstIP str_to_ip(std::string ip_str){
+    std::stringstream ss;
+    ss.str(ip_str);
+    std::string token;
+    DstIP dip;
+    int i = 0;
+    while(std::getline(ss, token, '.')){
+        dip.ip[i] = (unsigned char) std::atoi(token.c_str());
+        i++;
+    }
+    return dip;
+}
+
 SockRequest read_sock_request(std::string recv_str, std::string src_ip, std::string src_port){
     SockRequest sp;
     sp.VN = recv_str[0];
@@ -33,8 +46,20 @@ SockRequest read_sock_request(std::string recv_str, std::string src_ip, std::str
     while (recv_str.size()>=8 && recv_str[i] != 0){
         sp.other.push_back(recv_str[i]);
     }
-    // domain name
+    // if socks 4a, resolve domain name
     sp.domain_name = recv_str.substr(i);
+    if (sp.DSTIP[0] == 0 && sp.DSTIP[1] == 0 && sp.DSTIP[2] == 0){
+        io_service ios;
+        tcp::resolver  resolver(ios);
+        tcp::resolver::query q(sp.domain_name, std::to_string(sp.DSTPORT));
+        tcp::resolver::iterator iter = resolver.resolve(q);
+        DstIP dip = str_to_ip(iter->endpoint().address().to_string());
+        sp.DSTIP[0] = dip.ip[0];
+        sp.DSTIP[1] = dip.ip[1];
+        sp.DSTIP[2] = dip.ip[2];
+        sp.DSTIP[3] = dip.ip[3];
+    }
+
     // src info
     sp.src_ip = src_ip;
     sp.src_port = src_port;
@@ -56,15 +81,30 @@ std::string SockRequest::get_msg() {
     return ss.str();
 }
 
-SockReply get_sock_reply(bool granted, unsigned short dstport){
+std::string SockRequest ::to_str() {
+    std::string request (9, 0);
+    request[0] = VN;
+    request[1] = CD;
+    request[2] = DSTPORT >> 8;
+    request[3] = DSTPORT & 0xFF ;
+    request[4] = DSTIP[0];
+    request[5] = DSTIP[1];
+    request[6] = DSTIP[2];
+    request[7] = DSTIP[3];
+    request[8] = 0;
+    request = request + domain_name;
+    return request;
+}
+
+SockReply get_sock_reply(bool granted, unsigned short dstport, unsigned char dstip[4]){
     SockReply sr;
     sr.VN = 0;
     sr.CD = (granted)? 90 : 91;
     sr.DSTPORT = dstport;
-    sr.DSTIP[0] = 0;
-    sr.DSTIP[1] = 0;
-    sr.DSTIP[2] = 0;
-    sr.DSTIP[3] = 0;
+    sr.DSTIP[0] = dstip[0];
+    sr.DSTIP[1] = dstip[1];
+    sr.DSTIP[2] = dstip[2];
+    sr.DSTIP[3] = dstip[3];
     return sr;
 }
 
@@ -91,3 +131,4 @@ bool is_sock(std::string recv_str){
     }
     return false;
 }
+
