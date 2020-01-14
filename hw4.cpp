@@ -198,7 +198,13 @@ class ShellSession : public std::enable_shared_from_this<ShellSession> {
                     sr.DSTIP[2] = 0;
                     sr.DSTIP[3] = 1;
                     sr.domain_name = host_ip;
-                    write(_socket, buffer(sr.to_str()));
+                    std::array<char, 1024> _req_buffer;
+                    std::string req = sr.to_str();
+                    for(int i = 0; i < _req_buffer.size(); i++){
+                      _req_buffer[i] = req[i];
+                    }
+                    _req_buffer[req.size()] = NULL;
+                    write(_socket, buffer(_req_buffer, req.size()));
                     do_read();
                 }
                 else{
