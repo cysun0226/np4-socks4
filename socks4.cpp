@@ -143,18 +143,25 @@ std::string SockRequest::get_msg() {
 }
 
 std::string SockRequest ::to_str() {
-    std::string request (9, 0);
-    request[0] = VN;
-    request[1] = CD;
-    request[2] = DSTPORT >> 8;
-    request[3] = DSTPORT & 0xFF ;
-    request[4] = DSTIP[0];
-    request[5] = DSTIP[1];
-    request[6] = DSTIP[2];
-    request[7] = DSTIP[3];
-    request[8] = 0;
-    request = request + domain_name;
-    return request;
+    std::vector<char> request;
+    request.push_back(VN);
+    request.push_back(CD);
+    request.push_back(DSTPORT >> 8);
+    request.push_back(DSTPORT & 0xFF);
+    request.push_back(DSTIP[0]);
+    request.push_back(DSTIP[1]);
+    request.push_back(DSTIP[2]);
+    request.push_back(DSTIP[3]);
+    request.push_back(0);
+    for (size_t i = 0; i < domain_name.size(); i++){
+        request.push_back(domain_name[i]);
+    }
+    request.push_back(0);
+    std::string request_str(request.size(), 0);
+    for (size_t i = 0; i < request.size(); i++){
+        request_str[i] = request[i];
+    }
+    return request_str;
 }
 
 SockReply get_sock_reply(int mode, unsigned short dstport, unsigned char dstip[4]){
