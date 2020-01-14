@@ -173,8 +173,8 @@ private:
                  buffer(client_data, max_length),
                  [this](boost::system::error_code ec, size_t length) {
                      if (!ec) {
-                         std::cout << "# bind client_read " << std::endl;
-                         std::cout << client_data.data() << std::endl;
+                        //  std::cout << "# bind client_read " << std::endl;
+                        //  std::cout << client_data.data() << std::endl;
                      }
                      else{
                          _socket.close();

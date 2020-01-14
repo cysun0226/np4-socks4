@@ -105,7 +105,7 @@ SockRequest read_sock_request(std::string recv_str, std::string src_ip, std::str
         void *addr = &(ipv4->sin_addr);
         char *ipver = "IPv4";
         inet_ntop(res->ai_family, addr, ipstr, sizeof ipstr);
-        std::cout << ipstr << std::endl;
+        // std::cout << ipstr << std::endl;
 
 //        io_service ios;
 //        tcp::resolver  resolver(ios);
@@ -157,11 +157,11 @@ std::string SockRequest ::to_str() {
     for (size_t i = 0; i < domain_name.size(); i++){
         request.push_back(domain_name[i]);
     }
-    request.push_back(0);
     std::string request_str(request.size(), 0);
     for (size_t i = 0; i < request.size(); i++){
         request_str[i] = request[i];
     }
+    const int length = request.size();
     return request_str;
 }
 
