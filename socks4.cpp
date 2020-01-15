@@ -45,6 +45,8 @@ std::vector<Rule> firewall_rule;
 
 void read_config();
 
+std::vector<Rule> access_record;
+
 bool is_permit(int mode, unsigned char dstip[4]){
     read_config();
     for (int i = 0; i < firewall_rule.size(); ++i) {
@@ -67,6 +69,21 @@ bool is_permit(int mode, unsigned char dstip[4]){
         }
 
         if (match_count == 4 && mode == firewall_rule[i].mode){
+            bool has_record = false;
+            for (size_t a = 0; a < access_record.size(); a++){
+                if (ip_to_str(dstip) == access_record[a].ip){
+                    access_record[a].mode ++;
+                    bool has_record = true;
+                }
+            }
+
+            if(has_record != true){
+                Rule record;
+                record.ip = ip_to_str(dstip);
+                record.mode = 0;
+                access_record.push_back(record);
+            }
+
             return true;
         }
     }
