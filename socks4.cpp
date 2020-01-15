@@ -43,7 +43,10 @@ DstIP str_to_ip(std::string ip_str){
 
 std::vector<Rule> firewall_rule;
 
+void read_config();
+
 bool is_permit(int mode, unsigned char dstip[4]){
+    read_config();
     for (int i = 0; i < firewall_rule.size(); ++i) {
         std::string permit_ip[4];
         std::stringstream ss;
@@ -132,6 +135,7 @@ SockRequest read_sock_request(std::string recv_str, std::string src_ip, std::str
 
 std::string SockRequest::get_msg() {
     std::stringstream ss;
+    std::string reply = (is_permit(CD, DSTIP))? "Accept" : "Reject";
     ss << "\n[ Socks request ]\n" << std::endl <<
     "<S_IP>:\t" << src_ip << std::endl <<
     "<S_PORT>:\t" << src_port << std::endl <<
@@ -201,7 +205,17 @@ bool is_sock(std::string recv_str){
     return false;
 }
 
+bool has_rule(){
+    for (int i = 0; i < firewall_rule.size(); i++){
+	if (firewall_rule[i].ip != "*.*.*.*"){
+	    return true;
+	}
+    }
+    return false;
+}
+
 void read_config(){
+    firewall_rule.clear();
     std::ifstream in_file(CONFIG_FILE);
     std::string line;
     if (in_file){
@@ -216,6 +230,8 @@ void read_config(){
             ss >> rule.ip; // ip
             firewall_rule.push_back(rule);
         }
+	
+	if(has_rule()){
 
         std::cout << "\n # Permit IP list\n" << std::endl;
 
@@ -224,6 +240,7 @@ void read_config(){
             std::cout << m << " ";
             std::cout << firewall_rule[i].ip << std::endl;
         }
+	}
     }
     else{
         std::cerr << "can't open sock config: " << CONFIG_FILE << std::endl;
