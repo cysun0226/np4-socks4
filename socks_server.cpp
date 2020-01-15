@@ -5,6 +5,7 @@
 #include <memory>
 #include <utility>
 #include "sock4.h"
+#include <chrono>
 
 using namespace std;
 using namespace boost::asio;
@@ -45,12 +46,9 @@ public:
     void start() { do_resolve(); }
 private:
     void do_client_send(size_t length){
-        _client_socket.async_send(
-                buffer(web_data, length),
+        async_write(_client_socket, buffer(web_data, length),
                 [this](boost::system::error_code ec, size_t /* length */) {
                     if (!ec){
-//                        std::cout << "# send to client: " << std::endl;
-//                        std::cout << web_data.data();
                          do_web_read();
                     }
                     else{
@@ -61,16 +59,15 @@ private:
     }
 
     void do_web_send(size_t length){
-        _socket.async_send(
-                buffer(client_data, length),
+        async_write(_socket, buffer(client_data, length),
                 [this](boost::system::error_code ec, size_t /* length */) {
                     if (!ec){
-                        do_client_read();
+                         do_client_read();
                     }
                     else{
                         std::cerr << "can't send to server" << std::endl;
-                        _socket.close();
                         _client_socket.close();
+                        _socket.close();
                     }
                 });
     }
@@ -240,11 +237,12 @@ class ClientSession : public enable_shared_from_this<ClientSession> {
   enum { max_length = 1024 };
   ip::tcp::socket _socket;
   array<char, max_length> _data;
+  std::chrono::high_resolution_clock::time_point start_time;
 
  public:
   ClientSession(ip::tcp::socket socket) : _socket(move(socket)) {}
 
-  void start() { do_read(); }
+  void start() { do_read(); start_time = std::chrono::high_resolution_clock::now(); }
 
  private:
   void do_read() {
@@ -253,6 +251,10 @@ class ClientSession : public enable_shared_from_this<ClientSession> {
         buffer(_data, max_length),
         [this, self](boost::system::error_code ec, size_t length) {
           std::string recv_str(std::begin(_data), std::end(_data));
+
+          // check user time
+          auto end = std::chrono::high_resolution_clock::now();
+          
 
           if (is_sock(recv_str)){
               std::string src_ip = _socket.remote_endpoint().address().to_string();
@@ -293,14 +295,16 @@ class ClientSession : public enable_shared_from_this<ClientSession> {
 
   void do_write(std::string data) {
     auto self(shared_from_this());
-    _socket.async_send(
-        buffer(data),
-        [this, self](boost::system::error_code ec, size_t /* length */) {
-          if (!ec) do_read();
-          else{
-              std::cerr << "async send failed" << std::endl;
-          }
-        });
+    async_write(_socket, buffer(data),
+                [this](boost::system::error_code ec, size_t /* length */) {
+                    if (!ec){
+                         do_read();
+                    }
+                    else{
+                        std::cerr << "async send failed" << std::endl;
+                        _socket.close();
+                    }
+                });
   }
 };
 
@@ -346,6 +350,7 @@ class SocksServer {
             _socket = std::move(new_socket);
           global_io_service.notify_fork(boost::asio::io_context::fork_prepare);
             // fork a child for client session
+
 
           if (fork() == 0){
               // child process
