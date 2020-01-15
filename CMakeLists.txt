@@ -6,5 +6,5 @@ INCLUDE_DIRECTORIES( ${Boost_INCLUDE_DIR} )
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}-pthread")
 
-add_executable(sockServer socks_server.cpp socks4.cpp parse.h parse.cpp)
+add_executable(sockServer socks_server.cpp socks4.cpp parse.h parse.cpp socks_server.h)
 TARGET_LINK_LIBRARIES(sockServer LINK_PUBLIC ${Boost_LIBRARIES})
