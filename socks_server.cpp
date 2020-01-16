@@ -13,6 +13,13 @@ using namespace ip;
 
 io_service global_io_service;
 
+int connection_num = 0;
+
+void close_handler(int s){
+    connection_num--;
+    std::cout << "current connect num = " << connection_num << std::endl;
+}
+
 class ClientSession;
 
 class WebSession : public std::enable_shared_from_this<WebSession> {
@@ -54,6 +61,7 @@ private:
                     else{
                         _socket.close();
                         _client_socket.close();
+                        std::cout << "sock connection close" << std::endl;
                     }
                 });
     }
@@ -83,6 +91,8 @@ private:
                     else{
                         _socket.close();
                         _client_socket.close();
+                        std::cout << "sock connection close" << std::endl;
+                        raise(SIGUSR1);
                     }
                 });
     }
@@ -288,7 +298,9 @@ class ClientSession : public enable_shared_from_this<ClientSession> {
               ws.start();
               global_io_service.run();
           }
-          else{
+          
+          if(ec){
+              std::cout << "sock connection close" << std::endl;
           }
         });
   }
@@ -336,7 +348,10 @@ class SocksServer {
                       // Reap completed child processes so that we don't end up with
                       // zombies.
                       int status = 0;
-                      while (waitpid(-1, &status, WNOHANG) > 0) {}
+                      std::cout << "sock connection close" << std::endl;
+                      while (waitpid(-1, &status, WNOHANG) > 0) {
+                          std::cout << "sock connection close" << std::endl;
+                      }
 
                       wait_for_signal();
                   }
@@ -347,6 +362,13 @@ class SocksServer {
     _acceptor.async_accept(
             [this](boost::system::error_code ec, tcp::socket new_socket){
       if (!ec){
+          connection_num++;
+
+          if(connection_num > 3){
+              return;
+          }
+
+          std::cout << "new sock connection" << std::endl;
             _socket = std::move(new_socket);
           global_io_service.notify_fork(boost::asio::io_context::fork_prepare);
             // fork a child for client session
@@ -386,6 +408,8 @@ int main(int argc, char* const argv[]) {
   }
 
   try {
+    signal(SIGUSR1, close_handler);  
+
     unsigned short port = atoi(argv[1]);
     SocksServer server(port);
     global_io_service.run();
