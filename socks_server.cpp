@@ -14,6 +14,7 @@ using namespace ip;
 io_service global_io_service;
 
 int connection_num = 0;
+pid_t ppid;
 
 void close_handler(int s){
     connection_num--;
@@ -92,7 +93,8 @@ private:
                         _socket.close();
                         _client_socket.close();
                         std::cout << "sock connection close" << std::endl;
-                        raise(SIGUSR1);
+                        // raise(SIGUSR1);
+                        kill(ppid, SIGUSR1);
                     }
                 });
     }
@@ -363,12 +365,12 @@ class SocksServer {
             [this](boost::system::error_code ec, tcp::socket new_socket){
       if (!ec){
           connection_num++;
+          std::cout << "new sock connection" << std::endl;
 
           if(connection_num > 3){
               return;
           }
 
-          std::cout << "new sock connection" << std::endl;
             _socket = std::move(new_socket);
           global_io_service.notify_fork(boost::asio::io_context::fork_prepare);
             // fork a child for client session
@@ -380,6 +382,7 @@ class SocksServer {
               // child don't need listener
               _acceptor.close();
               _signal.cancel();
+              ppid = getppid();
 
               // start client session
               make_shared<ClientSession>(move(_socket))->start();
